@@ -236,22 +236,34 @@ class AsyncChat(_BaseChat):
     input_content = t.t_content(self._modules._api_client, message)
 
     async def async_generator():
-      output_contents = []
-      finish_reason = None
+      all_parts = []
+      current_text = []
       async for chunk in await self._modules.generate_content_stream(
           model=self._model,
           contents=self._curated_history + [input_content],
           config=config if config else self._config,
       ):
         if _validate_response(chunk):
-          output_contents.append(chunk.candidates[0].content)
-        if chunk.candidates and chunk.candidates[0].finish_reason:
-          finish_reason = chunk.candidates[0].finish_reason
+          for part in chunk.candidates[0].content.parts:
+            if part.text is not None:
+              current_text.append(part.text)
+            else:
+              if current_text:
+                all_parts.append(Part(text=''.join(current_text)))
+                current_text = []
+              all_parts.append(part)
         yield chunk
 
-      if output_contents and finish_reason:
+      if current_text:
+        all_parts.append(Part(text=''.join(current_text)))
+
+      if all_parts:
         self._curated_history.append(input_content)
-        self._curated_history.extend(output_contents)
+        merged_content = Content(
+            role=chunk.candidates[0].content.role,
+            parts=all_parts
+        )
+        self._curated_history.append(merged_content)
     return async_generator()
 
 
