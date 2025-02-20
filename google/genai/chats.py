@@ -474,8 +474,11 @@ class AsyncChat(_BaseChat):
     async def async_generator():  # type: ignore[no-untyped-def]
       output_contents = []
       finish_reason = None
+      role = None
       is_valid = True
       chunk = None
+      all_parts = []
+      current_text = []
       async for chunk in await self._modules.generate_content_stream(  # type: ignore[attr-defined]
           model=self._model,
           contents=self._curated_history + [input_content],  # type: ignore[arg-type]
@@ -484,11 +487,28 @@ class AsyncChat(_BaseChat):
         if not _validate_response(chunk):
           is_valid = False
         if chunk.candidates and chunk.candidates[0].content:
-          output_contents.append(chunk.candidates[0].content)
+          for part in chunk.candidates[0].content.parts:
+            if part.text is not None:
+              current_text.append(part.text)
+            else:
+              if current_text:
+                all_parts.append(Part(text=''.join(current_text)))
+                current_text = []
+              all_parts.append(part)
         if chunk.candidates and chunk.candidates[0].finish_reason:
           finish_reason = chunk.candidates[0].finish_reason
+        if chunk.candidates and chunk.candidates[0].content and chunk.candidates[0].content.role:
+          role = chunk.candidates[0].content.role
         yield chunk
-
+        
+      if current_text:
+        all_parts.append(Part(text=''.join(current_text)))
+      if all_parts:
+        output_contents.append(Content(
+            role=role,
+            parts=all_parts
+        ))
+      
       if not output_contents or finish_reason is None:
         is_valid = False
 
