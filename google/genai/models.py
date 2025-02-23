@@ -2996,6 +2996,9 @@ def _GenerateContentResponse_from_mldev(
   if getv(from_object, ['usageMetadata']) is not None:
     setv(to_object, ['usage_metadata'], getv(from_object, ['usageMetadata']))
 
+  if getv(from_object, ['error']) is not None:
+    raise ValueError(getv(from_object, ['error']))
+    
   return to_object
 
 
