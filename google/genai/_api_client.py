@@ -247,6 +247,7 @@ class HttpResponse:
     else:
       # Iterator of objects retrieved from the API.
       if hasattr(self.response_stream, 'aiter_lines'):
+        buffer = ""
         async for chunk in self.response_stream.aiter_lines():
           # This is httpx.Response.
           if chunk:
@@ -256,7 +257,15 @@ class HttpResponse:
               chunk = chunk.decode('utf-8')
             if chunk.startswith('data: '):
               chunk = chunk[len('data: ') :]
-            yield json.loads(chunk)
+            buffer += chunk
+            try:
+              yield json.loads(buffer)
+              buffer = ""
+            except json.JSONDecodeError:
+              # If the buffer is not a valid JSON object (e.g. it's a partial object), we need to wait for more data.
+              pass
+        if buffer:
+          raise ValueError("Error parsing streaming response. remaining buffer: ", buffer)
       else:
         raise ValueError('Error parsing streaming response.')
 
