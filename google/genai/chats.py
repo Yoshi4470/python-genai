@@ -484,9 +484,9 @@ class AsyncChat(_BaseChat):
           contents=self._curated_history + [input_content],  # type: ignore[arg-type]
           config=config if config else self._config,
       ):
-        if not _validate_response(chunk):
+        if not _validate_response(chunk) and not (chunk.candidates and chunk.candidates[0].finish_reason):
           is_valid = False
-        if chunk.candidates and chunk.candidates[0].content:
+        if chunk.candidates and chunk.candidates[0].content and chunk.candidates[0].content.parts:
           for part in chunk.candidates[0].content.parts:
             if part.text is not None:
               current_text.append(part.text)
