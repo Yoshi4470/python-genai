@@ -18,3 +18,7 @@ nosetests.xml
 
 # macOS
 .DS_Store
+
+#local
+google_genai.egg-info/
+__pycache__/
