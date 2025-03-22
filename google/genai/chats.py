@@ -197,8 +197,10 @@ def _is_part_type(
 ) -> TypeGuard[t.ContentType]:
   if isinstance(contents, list):
     return all(_is_part_type(part) for part in contents)
+  elif isinstance(contents, dict):
+    return all(_is_part_type(part) for part in contents.values())
   else:
-    allowed_part_types = get_args(types.PartUnion)
+    allowed_part_types = get_args(types.PartUnionDict)
     if type(contents) in allowed_part_types:
       return True
     else:
