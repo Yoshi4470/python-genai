@@ -1,4 +1,4 @@
-# Copyright 2024 Google LLC
+# Copyright 2025 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -229,6 +229,29 @@ test_table: list[pytest_helper.TestTableItem] = [
         ),
     ),
     pytest_helper.TestTableItem(
+        name='test_google_search_tool_with_time_range_filter',
+        parameters=types._GenerateContentParameters(
+            model='gemini-2.0-flash-exp',
+            contents=t.t_contents(None, 'What is the QQQ stock price?'),
+            config=types.GenerateContentConfig(
+                tools=[
+                    types.Tool(
+                        google_search=types.GoogleSearch(
+                            time_range_filter=types.Interval(
+                                start_time=datetime.fromisoformat(
+                                    '2025-05-01T00:00:00Z'
+                                ),
+                                end_time=datetime.fromisoformat(
+                                    '2025-05-03T00:00:00Z'
+                                ),
+                            )
+                        )
+                    )
+                ]
+            ),
+        ),
+    ),
+    pytest_helper.TestTableItem(
         name='test_speech_with_config',
         parameters=types._GenerateContentParameters(
             model='gemini-2.0-flash-exp',
@@ -242,9 +265,85 @@ test_table: list[pytest_helper.TestTableItem] = [
                         prebuilt_voice_config=types.PrebuiltVoiceConfig(
                             voice_name='charon'
                         )
-                        )
                     )
                 ),
+            ),
+        ),
+    ),
+    pytest_helper.TestTableItem(
+        name='test_speech_with_multi_speaker_voice_config',
+        exception_if_vertex='not supported',
+        parameters=types._GenerateContentParameters(
+            model='gemini-2.0-flash-exp',
+            contents=t.t_contents(
+                None, 'Alice says "Hi", Bob replies with "what\'s up"?'
+            ),
+            config=types.GenerateContentConfig(
+                response_modalities=['audio'],
+                speech_config=types.SpeechConfig(
+                    multi_speaker_voice_config=types.MultiSpeakerVoiceConfig(
+                        speaker_voice_configs=[
+                            types.SpeakerVoiceConfig(
+                                speaker='Alice',
+                                voice_config=types.VoiceConfig(
+                                    prebuilt_voice_config=types.PrebuiltVoiceConfig(
+                                        voice_name='leda'
+                                    )
+                                ),
+                            ),
+                            types.SpeakerVoiceConfig(
+                                speaker='Bob',
+                                voice_config=types.VoiceConfig(
+                                    prebuilt_voice_config=types.PrebuiltVoiceConfig(
+                                        voice_name='kore'
+                                    )
+                                ),
+                            ),
+                        ],
+                    )
+                ),
+            ),
+        ),
+    ),
+    pytest_helper.TestTableItem(
+        name='test_speech_error_with_speech_config_and_multi_speech_config',
+        exception_if_vertex='not supported',
+        exception_if_mldev='mutually exclusive',
+        parameters=types._GenerateContentParameters(
+            model='gemini-2.0-flash-exp',
+            contents=t.t_contents(
+                None, 'Alice says "Hi", Bob replies with "what\'s up"?'
+            ),
+            config=types.GenerateContentConfig(
+                response_modalities=['audio'],
+                speech_config=types.SpeechConfig(
+                    voice_config=types.VoiceConfig(
+                        prebuilt_voice_config=types.PrebuiltVoiceConfig(
+                            voice_name='puck'
+                        )
+                    ),
+                    multi_speaker_voice_config=types.MultiSpeakerVoiceConfig(
+                        speaker_voice_configs=[
+                            types.SpeakerVoiceConfig(
+                                speaker='Alice',
+                                voice_config=types.VoiceConfig(
+                                    prebuilt_voice_config=types.PrebuiltVoiceConfig(
+                                        voice_name='leda'
+                                    )
+                                ),
+                            ),
+                            types.SpeakerVoiceConfig(
+                                speaker='Bob',
+                                voice_config=types.VoiceConfig(
+                                    prebuilt_voice_config=types.PrebuiltVoiceConfig(
+                                        voice_name='kore'
+                                    )
+                                ),
+                            ),
+                        ],
+                    ),
+                ),
+            ),
         ),
     ),
     pytest_helper.TestTableItem(
@@ -262,17 +361,24 @@ test_table: list[pytest_helper.TestTableItem] = [
         name='test_audio_timestamp',
         parameters=types._GenerateContentParameters(
             model='gemini-1.5-flash',
-            contents=[types.Content(
-                role='user',
-                parts=[
-                    types.Part(
-                        file_data=types.FileData(
-                            file_uri='gs://cloud-samples-data/generative-ai/audio/pixel.mp3',
-                            mime_type='audio/mpeg')),
-                    types.Part(text="""Can you transcribe this interview, in the
+            contents=[
+                types.Content(
+                    role='user',
+                    parts=[
+                        types.Part(
+                            file_data=types.FileData(
+                                file_uri='gs://cloud-samples-data/generative-ai/audio/pixel.mp3',
+                                mime_type='audio/mpeg',
+                            )
+                        ),
+                        types.Part(
+                            text="""Can you transcribe this interview, in the
                            format of timecode, speaker, caption. Use speaker A, 
-                           speaker B, etc. to identify speakers."""),]
-            )],
+                           speaker B, etc. to identify speakers."""
+                        ),
+                    ],
+                )
+            ],
             config=types.GenerateContentConfig(audio_timestamp=True),
         ),
         exception_if_mldev='not supported',
@@ -1220,7 +1326,7 @@ def test_list_of_pydantic_schema_with_nested_list_class(client):
   assert isinstance(response.parsed[0].currency[0], CurrencyInfo)
 
 
-def test_response_schema_with_unsupported_type_raises(client):
+def test_response_schema_with_dict_of_pydantic_schema(client):
   class CountryInfo(BaseModel):
     population: int
     capital: str
@@ -1229,8 +1335,18 @@ def test_response_schema_with_unsupported_type_raises(client):
     official_language: str
     total_area_sq_mi: int
 
-  with pytest.raises(ValueError) as e:
-    client.models.generate_content(
+  if not client.vertexai:
+    with pytest.raises(ValueError) as e:
+      client.models.generate_content(
+          model='gemini-1.5-flash',
+          contents='Give me information for the United States, Canada, and Mexico.',
+          config=types.GenerateContentConfig(
+              response_mime_type='application/json',
+              response_schema=dict[str, CountryInfo],
+          )
+      )
+  else:
+    response = client.models.generate_content(
         model='gemini-1.5-flash',
         contents='Give me information for the United States, Canada, and Mexico.',
         config=types.GenerateContentConfig(
@@ -1238,8 +1354,20 @@ def test_response_schema_with_unsupported_type_raises(client):
             response_schema=dict[str, CountryInfo],
         )
     )
-    assert 'Unsupported schema type' in str(e)
-    assert 'GenericAlias' in str(e)
+    assert response.text
+
+
+def test_schema_with_unsupported_type_raises(client):
+  with pytest.raises(ValueError) as e:
+    client.models.generate_content(
+        model='gemini-1.5-flash',
+        contents='Give me information for the United States, Canada, and Mexico.',
+        config=types.GenerateContentConfig(
+            response_mime_type='application/json',
+            response_schema=types.Schema(),
+        )
+    )
+  assert 'Unsupported schema type' in str(e)
 
 
 def test_enum_schema_with_enum_mime_type(client):
@@ -1631,6 +1759,36 @@ def test_schema_from_model_schema(client):
   )
 
   response.text
+
+
+def test_schema_with_additional_properties(client):
+
+  class Foo(BaseModel):
+    bar: str
+    baz: int
+    qux: dict[str, str]
+
+  if client.vertexai:
+    response = client.models.generate_content(
+        model='gemini-2.0-flash',
+        contents='What is your name?',
+        config=types.GenerateContentConfig(
+            response_mime_type='application/json',
+            response_schema=Foo,
+        ),
+    )
+    assert response.text
+  else:
+    with pytest.raises(ValueError) as e:
+      client.models.generate_content(
+          model='gemini-2.0-flash',
+          contents='What is your name?',
+          config=types.GenerateContentConfig(
+              response_mime_type='application/json',
+              response_schema=Foo,
+          ),
+      )
+    assert 'additionalProperties is not supported in the Gemini API.' in str(e)
 
 
 def test_function(client):

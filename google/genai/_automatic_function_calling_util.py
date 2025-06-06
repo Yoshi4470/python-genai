@@ -1,4 +1,4 @@
-# Copyright 2024 Google LLC
+# Copyright 2025 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -37,6 +37,7 @@ _py_builtin_type_to_schema_type = {
     bool: types.Type.BOOLEAN,
     list: types.Type.ARRAY,
     dict: types.Type.OBJECT,
+    None: types.Type.NULL,
 }
 
 

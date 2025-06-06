@@ -1,4 +1,4 @@
-# Copyright 2024 Google LLC
+# Copyright 2025 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -82,6 +82,7 @@ test_table: list[pytest_helper.TestTableItem] = [
                 aspect_ratio="16:9",
                 person_generation="allow_adult",
                 negative_prompt="ugly, low quality",
+                enhance_prompt=True,
             ),
         ),
     ),

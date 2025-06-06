@@ -1,4 +1,4 @@
-# Copyright 2024 Google LLC
+# Copyright 2025 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -63,13 +63,8 @@ def _extract_curated_history(
   """Extracts the curated (valid) history from a comprehensive history.
 
   The comprehensive history contains all turns (user input and model responses),
-  including any invalid or rejected model outputs.  This function filters
-  that history to return only the valid turns.
-
-  A "turn" starts with one user input (a single content) and then follows by
-  corresponding model response (which may consist of multiple contents).
-  Turns are assumed to alternate: user input, model output, user input, model
-  output, etc.
+  including any invalid or rejected model outputs. This function filters that
+  history to return only the valid turns.
 
   Args:
       comprehensive_history: A list representing the complete chat history.
@@ -84,8 +79,6 @@ def _extract_curated_history(
   length = len(comprehensive_history)
   i = 0
   current_input = comprehensive_history[i]
-  if current_input.role != "user":
-    raise ValueError("History must start with a user turn.")
   while i < length:
     if comprehensive_history[i].role not in ["user", "model"]:
       raise ValueError(
@@ -94,6 +87,7 @@ def _extract_curated_history(
 
     if comprehensive_history[i].role == "user":
       current_input = comprehensive_history[i]
+      curated_history.append(current_input)
       i += 1
     else:
       current_output = []
@@ -104,8 +98,9 @@ def _extract_curated_history(
           is_valid = False
         i += 1
       if is_valid:
-        curated_history.append(current_input)
         curated_history.extend(current_output)
+      elif curated_history:
+        curated_history.pop()
   return curated_history
 
 
@@ -160,7 +155,7 @@ class _BaseChat:
         # Because the AFC input contains the entire curated chat history in
         # addition to the new user input, we need to truncate the AFC history
         # to deduplicate the existing chat history.
-        automatic_function_calling_history[len(self._curated_history):]
+        automatic_function_calling_history[len(self._curated_history) :]
         if automatic_function_calling_history
         else [user_input]
     )
@@ -330,7 +325,7 @@ class Chat(_BaseChat):
         yield chunk
       automatic_function_calling_history = (
           chunk.automatic_function_calling_history
-          if chunk.automatic_function_calling_history
+          if chunk is not None and chunk.automatic_function_calling_history
           else []
       )
       self.record_history(
@@ -517,9 +512,12 @@ class AsyncChat(_BaseChat):
       self.record_history(
           user_input=input_content,
           model_output=output_contents,
-          automatic_function_calling_history=chunk.automatic_function_calling_history if chunk.automatic_function_calling_history else [],
+          automatic_function_calling_history=chunk.automatic_function_calling_history
+          if chunk is not None and chunk.automatic_function_calling_history
+          else [],
           is_valid=is_valid,
       )
+
     return async_generator()  # type: ignore[no-untyped-call, no-any-return]
 
 

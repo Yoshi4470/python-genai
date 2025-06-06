@@ -1,4 +1,4 @@
-# Copyright 2024 Google LLC
+# Copyright 2025 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -63,6 +63,31 @@ MAX_RETRY_COUNT = 3
 INITIAL_RETRY_DELAY = 1  # second
 DELAY_MULTIPLIER = 2
 
+
+class EphemeralTokenAPIKeyError(ValueError):
+  """Error raised when the API key is invalid."""
+
+
+# This method checks for the API key in the environment variables. Google API
+# key is precedenced over Gemini API key.
+def _get_env_api_key() -> Optional[str]:
+  """Gets the API key from environment variables, prioritizing GOOGLE_API_KEY.
+
+  Returns:
+      The API key string if found, otherwise None. Empty string is considered
+      invalid.
+  """
+  env_google_api_key = os.environ.get('GOOGLE_API_KEY', None)
+  env_gemini_api_key = os.environ.get('GEMINI_API_KEY', None)
+  if env_google_api_key and env_gemini_api_key:
+    logger.warning(
+        'Both GOOGLE_API_KEY and GEMINI_API_KEY are set. Using'
+        ' GOOGLE_API_KEY.'
+    )
+
+  return env_google_api_key or env_gemini_api_key or None
+
+
 def _append_library_version_headers(headers: dict[str, str]) -> None:
   """Appends the telemetry header to the headers dict."""
   library_label = f'google-genai-sdk/{version.__version__}'
@@ -72,14 +97,14 @@ def _append_library_version_headers(headers: dict[str, str]) -> None:
       'user-agent' in headers
       and version_header_value not in headers['user-agent']
   ):
-    headers['user-agent'] += f' {version_header_value}'
+    headers['user-agent'] = f'{version_header_value} ' + headers['user-agent']
   elif 'user-agent' not in headers:
     headers['user-agent'] = version_header_value
   if (
       'x-goog-api-client' in headers
       and version_header_value not in headers['x-goog-api-client']
   ):
-    headers['x-goog-api-client'] += f' {version_header_value}'
+    headers['x-goog-api-client'] = f'{version_header_value} ' + headers['x-goog-api-client']
   elif 'x-goog-api-client' not in headers:
     headers['x-goog-api-client'] = version_header_value
 
@@ -375,7 +400,7 @@ class BaseApiClient:
     # Retrieve implicitly set values from the environment.
     env_project = os.environ.get('GOOGLE_CLOUD_PROJECT', None)
     env_location = os.environ.get('GOOGLE_CLOUD_LOCATION', None)
-    env_api_key = os.environ.get('GOOGLE_API_KEY', None)
+    env_api_key = _get_env_api_key()
     self.project = project or env_project
     self.location = location or env_location
     self.api_key = api_key or env_api_key
@@ -633,6 +658,11 @@ class BaseApiClient:
         base_url,
         versioned_path,
     )
+
+    if self.api_key and self.api_key.startswith('auth_tokens/'):
+      raise EphemeralTokenAPIKeyError(
+          'Ephemeral tokens can only be used with the live API.'
+      )
 
     timeout_in_seconds = _get_timeout_in_seconds(patched_http_options.timeout)
 
